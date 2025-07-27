@@ -44,13 +44,15 @@ function App() {
       <nav className="bg-white border-b-4 border-black">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex space-x-0">
-            {tabs.map((tab) => {
+            {tabs.map((tab, index) => {
               const Icon = tab.icon
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center space-x-3 px-8 py-6 font-black text-lg uppercase tracking-wide border-r-4 border-black transition-all duration-200 hover:bg-gray-50 ${
+                    index === 0 ? 'border-l-4' : ''
+                  } ${
                     activeTab === tab.id
                       ? 'bg-accent text-black'
                       : 'bg-white text-gray-700 hover:text-black'
