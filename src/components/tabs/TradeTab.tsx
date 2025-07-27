@@ -12,6 +12,7 @@ interface Strategy {
   pairs: string[]
   config: StrategyConfig
   createdAt: Date
+  performance: StrategyPerformance
 }
 
 interface StrategyConfig {
@@ -21,6 +22,12 @@ interface StrategyConfig {
   takeProfit: string
   leverage: string
   tradingPairs: string[]
+}
+
+interface StrategyPerformance {
+  trades: number
+  wins: number
+  profit: number
 }
 
 interface Toast {
@@ -57,7 +64,9 @@ const TradeTab: React.FC = () => {
         const parsed = JSON.parse(savedStrategies)
         const strategiesWithDates = parsed.map((s: any) => ({
           ...s,
-          createdAt: new Date(s.createdAt)
+          createdAt: new Date(s.createdAt),
+          // Initialize performance if it doesn't exist
+          performance: s.performance || { trades: 0, wins: 0, profit: 0 }
         }))
         
         // Filter only active strategies and sort by newest first
@@ -108,8 +117,61 @@ const TradeTab: React.FC = () => {
     return `${diffInDays}d ago`
   }
 
-  const handleMockTrade = (strategyName: string) => {
-    showToast(`Strategy "${strategyName}" mock trade executed!`, 'success')
+  const formatProfit = (profit: number) => {
+    const sign = profit >= 0 ? '+' : ''
+    return `${sign}${profit} USDT`
+  }
+
+  const calculateWinRate = (wins: number, totalTrades: number) => {
+    if (totalTrades === 0) return '0%'
+    return `${Math.round((wins / totalTrades) * 100)}%`
+  }
+
+  const handleMockTrade = (strategyId: string, strategyName: string) => {
+    const savedStrategies = localStorage.getItem('tradingStrategies')
+    if (savedStrategies) {
+      const parsed = JSON.parse(savedStrategies)
+      
+      // Simulate trade outcome: 50% chance to win
+      const isWin = Math.random() >= 0.5
+      const profitChange = isWin ? 10 : -5
+      
+      const updated = parsed.map((s: any) => {
+        if (s.id === strategyId) {
+          const currentPerformance = s.performance || { trades: 0, wins: 0, profit: 0 }
+          return {
+            ...s,
+            performance: {
+              trades: currentPerformance.trades + 1,
+              wins: currentPerformance.wins + (isWin ? 1 : 0),
+              profit: currentPerformance.profit + profitChange
+            }
+          }
+        }
+        return s
+      })
+      
+      localStorage.setItem('tradingStrategies', JSON.stringify(updated))
+      
+      // Update local state immediately
+      setActiveStrategies(prev => prev.map(s => {
+        if (s.id === strategyId) {
+          return {
+            ...s,
+            performance: {
+              trades: s.performance.trades + 1,
+              wins: s.performance.wins + (isWin ? 1 : 0),
+              profit: s.performance.profit + profitChange
+            }
+          }
+        }
+        return s
+      }))
+      
+      // Show success toast with trade result
+      const resultText = isWin ? `WIN (+10 USDT)` : `LOSS (-5 USDT)`
+      showToast(`Strategy "${strategyName}" mock trade executed! ${resultText}`, 'success')
+    }
   }
 
   const handlePauseStrategy = (strategyId: string, strategyName: string) => {
@@ -196,16 +258,30 @@ const TradeTab: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Strategy Stats */}
+                {/* Performance Stats */}
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <p className="text-xs font-bold text-gray-600 uppercase">Profit</p>
-                    <p className="text-sm font-black text-accent">{strategy.profit}</p>
+                    <p className={`text-sm font-black ${
+                      strategy.performance.profit >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {formatProfit(strategy.performance.profit)}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs font-bold text-gray-600 uppercase">Win Rate</p>
-                    <p className="text-sm font-black text-black">{strategy.winRate}</p>
+                    <p className="text-sm font-black text-black">
+                      {calculateWinRate(strategy.performance.wins, strategy.performance.trades)} Win Rate
+                    </p>
                   </div>
+                </div>
+
+                {/* Trade Count */}
+                <div className="mb-4">
+                  <p className="text-xs font-bold text-gray-600 uppercase">Total Trades</p>
+                  <p className="text-sm font-black text-black">
+                    {strategy.performance.trades} trades ({strategy.performance.wins} wins)
+                  </p>
                 </div>
 
                 {/* Creation Time */}
@@ -219,7 +295,7 @@ const TradeTab: React.FC = () => {
                 {/* Action Buttons */}
                 <div className="flex space-x-2">
                   <button
-                    onClick={() => handleMockTrade(strategy.name)}
+                    onClick={() => handleMockTrade(strategy.id, strategy.name)}
                     className="flex-1 bg-accent border-2 border-black py-2 px-3 font-black text-black text-xs uppercase hover:bg-accent-dark transition-colors flex items-center justify-center space-x-1"
                   >
                     <TestTube className="w-3 h-3" />
