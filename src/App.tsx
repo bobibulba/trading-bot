@@ -51,7 +51,7 @@ function App() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-3 px-8 py-6 font-black text-lg uppercase tracking-wide border-r-4 border-black transition-all duration-200 hover:bg-gray-50 ${
+                  className={`flex items-center justify-center space-x-3 px-8 py-6 font-black text-lg uppercase tracking-wide border-r-4 border-black transition-all duration-200 hover:bg-gray-50 min-w-[140px] ${
                     index === 0 ? 'border-l-4' : ''
                   } ${
                     activeTab === tab.id
@@ -60,7 +60,7 @@ function App() {
                   }`}
                 >
                   <Icon className="w-6 h-6" />
-                  <span>{tab.label}</span>
+                  <span className="text-center">{tab.label}</span>
                 </button>
               )
             })}
