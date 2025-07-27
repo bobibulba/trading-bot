@@ -1,11 +1,12 @@
 import React, { useState } from 'react'
-import { TrendingUp, BarChart3, Zap, FileText, Bot } from 'lucide-react'
+import { TrendingUp, BarChart3, Zap, DollarSign, FileText, Bot } from 'lucide-react'
 import TabContent from './components/TabContent'
 
 const tabs = [
   { id: 'overview', label: 'Overview', icon: TrendingUp },
   { id: 'market', label: 'Market', icon: BarChart3 },
   { id: 'strategy', label: 'Strategy Lab', icon: Zap },
+  { id: 'trade', label: 'Trade', icon: DollarSign },
   { id: 'logs', label: 'Trade Logs', icon: FileText },
   { id: 'ai', label: 'AI Assistant', icon: Bot },
 ]

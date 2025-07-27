@@ -2,6 +2,7 @@ import React from 'react'
 import OverviewTab from './tabs/OverviewTab'
 import MarketTab from './tabs/MarketTab'
 import StrategyTab from './tabs/StrategyTab'
+import TradeTab from './tabs/TradeTab'
 import LogsTab from './tabs/LogsTab'
 import AITab from './tabs/AITab'
 
@@ -18,6 +19,8 @@ const TabContent: React.FC<TabContentProps> = ({ activeTab }) => {
         return <MarketTab />
       case 'strategy':
         return <StrategyTab />
+      case 'trade':
+        return <TradeTab />
       case 'logs':
         return <LogsTab />
       case 'ai':
