@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Zap, Target, Settings, Play, Pause, BarChart3, X, Check, Edit3, Trash2, Plus } from 'lucide-react'
+import { Zap, Target, Settings, Play, Pause, BarChart3, X, Check, Edit3, Trash2, Plus, AlertTriangle } from 'lucide-react'
 import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts'
 
 interface Strategy {
@@ -26,7 +26,13 @@ interface StrategyConfig {
 
 interface Toast {
   message: string
-  type: 'success' | 'error' | 'info'
+  type: 'success' | 'error' | 'info' | 'warning'
+}
+
+interface DeleteConfirmation {
+  isOpen: boolean
+  strategyId: string | null
+  strategyName: string
 }
 
 const StrategyTab: React.FC = () => {
@@ -46,6 +52,13 @@ const StrategyTab: React.FC = () => {
 
   const [showPairSelector, setShowPairSelector] = useState(false)
   const [toast, setToast] = useState<Toast | null>(null)
+  const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmation>({
+    isOpen: false,
+    strategyId: null,
+    strategyName: ''
+  })
+
+  const MAX_STRATEGIES = 10
 
   const availablePairs = [
     'BTC/USDT', 'ETH/USDT', 'ADA/USDT', 'SOL/USDT', 'BNB/USDT', 
@@ -73,10 +86,13 @@ const StrategyTab: React.FC = () => {
     const savedStrategies = localStorage.getItem('tradingStrategies')
     if (savedStrategies) {
       const parsed = JSON.parse(savedStrategies)
-      setStrategies(parsed.map((s: any) => ({
+      const strategiesWithDates = parsed.map((s: any) => ({
         ...s,
         createdAt: new Date(s.createdAt)
-      })))
+      }))
+      // Sort by newest first
+      strategiesWithDates.sort((a: Strategy, b: Strategy) => b.createdAt.getTime() - a.createdAt.getTime())
+      setStrategies(strategiesWithDates)
     } else {
       // Initialize with mock strategies
       const mockStrategies: Strategy[] = [
@@ -97,7 +113,7 @@ const StrategyTab: React.FC = () => {
             leverage: '5',
             tradingPairs: ['BTC/USDT', 'ETH/USDT']
           },
-          createdAt: new Date()
+          createdAt: new Date(Date.now() - 86400000) // 1 day ago
         },
         {
           id: '2',
@@ -116,9 +132,11 @@ const StrategyTab: React.FC = () => {
             leverage: '2',
             tradingPairs: ['ADA/USDT', 'SOL/USDT']
           },
-          createdAt: new Date()
+          createdAt: new Date() // Now
         }
       ]
+      // Sort by newest first
+      mockStrategies.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       setStrategies(mockStrategies)
       localStorage.setItem('tradingStrategies', JSON.stringify(mockStrategies))
     }
@@ -162,6 +180,12 @@ const StrategyTab: React.FC = () => {
       return
     }
 
+    // Check strategy limit for new strategies only
+    if (!editingStrategy && strategies.length >= MAX_STRATEGIES) {
+      showToast(`Strategy limit reached! You can only create up to ${MAX_STRATEGIES} strategies.`, 'warning')
+      return
+    }
+
     const newStrategy: Strategy = {
       id: editingStrategy || generateId(),
       name: strategyName,
@@ -172,15 +196,21 @@ const StrategyTab: React.FC = () => {
       winRate: '0%',
       pairs: config.tradingPairs,
       config: { ...config },
-      createdAt: new Date()
+      createdAt: editingStrategy ? 
+        strategies.find(s => s.id === editingStrategy)?.createdAt || new Date() : 
+        new Date()
     }
 
     if (editingStrategy) {
-      setStrategies(prev => prev.map(s => s.id === editingStrategy ? newStrategy : s))
+      const updatedStrategies = strategies.map(s => s.id === editingStrategy ? newStrategy : s)
+      // Sort by newest first
+      updatedStrategies.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      setStrategies(updatedStrategies)
       showToast(`Strategy "${strategyName}" updated successfully!`, 'success')
       setEditingStrategy(null)
     } else {
-      setStrategies(prev => [...prev, newStrategy])
+      const newStrategies = [newStrategy, ...strategies]
+      setStrategies(newStrategies)
       showToast(`Strategy "${strategyName}" deployed successfully!`, 'success')
     }
 
@@ -205,18 +235,54 @@ const StrategyTab: React.FC = () => {
     showToast(`Editing strategy "${strategy.name}"`, 'info')
   }
 
-  const handleDelete = (strategyId: string) => {
+  const handleDeleteClick = (strategyId: string) => {
     const strategy = strategies.find(s => s.id === strategyId)
-    setStrategies(prev => prev.filter(s => s.id !== strategyId))
-    showToast(`Strategy "${strategy?.name}" deleted`, 'success')
+    if (strategy) {
+      setDeleteConfirmation({
+        isOpen: true,
+        strategyId,
+        strategyName: strategy.name
+      })
+    }
+  }
+
+  const confirmDelete = () => {
+    if (deleteConfirmation.strategyId) {
+      const updatedStrategies = strategies.filter(s => s.id !== deleteConfirmation.strategyId)
+      setStrategies(updatedStrategies)
+      showToast(`Strategy "${deleteConfirmation.strategyName}" deleted`, 'success')
+      
+      // Update localStorage
+      if (updatedStrategies.length === 0) {
+        localStorage.removeItem('tradingStrategies')
+      } else {
+        localStorage.setItem('tradingStrategies', JSON.stringify(updatedStrategies))
+      }
+    }
+    
+    setDeleteConfirmation({
+      isOpen: false,
+      strategyId: null,
+      strategyName: ''
+    })
+  }
+
+  const cancelDelete = () => {
+    setDeleteConfirmation({
+      isOpen: false,
+      strategyId: null,
+      strategyName: ''
+    })
   }
 
   const toggleStrategyStatus = (strategyId: string) => {
-    setStrategies(prev => prev.map(s => 
+    const updatedStrategies = strategies.map(s => 
       s.id === strategyId 
         ? { ...s, status: s.status === 'Active' ? 'Paused' : 'Active' as 'Active' | 'Paused' }
         : s
-    ))
+    )
+    setStrategies(updatedStrategies)
+    
     const strategy = strategies.find(s => s.id === strategyId)
     const newStatus = strategy?.status === 'Active' ? 'Paused' : 'Active'
     showToast(`Strategy "${strategy?.name}" ${newStatus.toLowerCase()}`, 'info')
@@ -243,11 +309,54 @@ const StrategyTab: React.FC = () => {
       {toast && (
         <div className={`fixed top-4 right-4 z-50 border-4 border-black p-4 shadow-brutal ${
           toast.type === 'success' ? 'bg-accent' : 
-          toast.type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+          toast.type === 'error' ? 'bg-red-500' : 
+          toast.type === 'warning' ? 'bg-yellow-500' :
+          'bg-blue-500'
         }`}>
           <div className="flex items-center space-x-2">
-            <Check className="w-5 h-5 text-black" />
+            {toast.type === 'warning' ? (
+              <AlertTriangle className="w-5 h-5 text-black" />
+            ) : (
+              <Check className="w-5 h-5 text-black" />
+            )}
             <span className="font-black text-black">{toast.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmation.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white border-4 border-black shadow-brutal p-8 max-w-md w-full mx-4">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-12 h-12 bg-red-500 border-4 border-black flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-black uppercase">Confirm Delete</h3>
+                <p className="text-sm font-bold text-gray-600">This action cannot be undone</p>
+              </div>
+            </div>
+            
+            <p className="font-bold text-black mb-8">
+              Are you sure you want to delete the strategy "{deleteConfirmation.strategyName}"? 
+              This action cannot be undone.
+            </p>
+            
+            <div className="flex space-x-4">
+              <button
+                onClick={cancelDelete}
+                className="flex-1 bg-gray-300 border-4 border-black py-3 font-black text-black uppercase hover:bg-gray-400 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex-1 bg-red-500 border-4 border-black py-3 font-black text-white uppercase hover:bg-red-600 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -256,8 +365,15 @@ const StrategyTab: React.FC = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-black text-black uppercase">Active Strategies</h2>
-          <div className="bg-gray-50 border-4 border-black px-4 py-2">
-            <span className="font-black text-black">{strategies.length} Total</span>
+          <div className="flex items-center space-x-4">
+            <div className="bg-gray-50 border-4 border-black px-4 py-2">
+              <span className="font-black text-black">{strategies.length}/{MAX_STRATEGIES} Strategies</span>
+            </div>
+            {strategies.length >= MAX_STRATEGIES && (
+              <div className="bg-yellow-500 border-4 border-black px-4 py-2">
+                <span className="font-black text-black">LIMIT REACHED</span>
+              </div>
+            )}
           </div>
         </div>
         
@@ -300,6 +416,12 @@ const StrategyTab: React.FC = () => {
                   <span className="font-bold text-gray-600">Pairs:</span>
                   <span className="font-bold text-black text-sm">{strategy.pairs.join(', ')}</span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="font-bold text-gray-600">Created:</span>
+                  <span className="font-bold text-black text-xs">
+                    {strategy.createdAt.toLocaleDateString()}
+                  </span>
+                </div>
               </div>
 
               <div className="flex space-x-2">
@@ -330,7 +452,7 @@ const StrategyTab: React.FC = () => {
                   <Edit3 className="w-4 h-4" />
                 </button>
                 <button 
-                  onClick={() => handleDelete(strategy.id)}
+                  onClick={() => handleDeleteClick(strategy.id)}
                   className="bg-red-500 border-2 border-black px-4 py-2 font-black text-white text-xs uppercase hover:bg-red-600 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -504,9 +626,15 @@ const StrategyTab: React.FC = () => {
           <div className="mt-8">
             <button 
               onClick={handleDeploy}
-              className="w-full bg-accent border-4 border-black py-4 font-black text-black uppercase tracking-wide hover:bg-accent-dark transition-colors"
+              disabled={!editingStrategy && strategies.length >= MAX_STRATEGIES}
+              className={`w-full border-4 border-black py-4 font-black uppercase tracking-wide transition-colors ${
+                !editingStrategy && strategies.length >= MAX_STRATEGIES
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-accent text-black hover:bg-accent-dark'
+              }`}
             >
-              {editingStrategy ? 'Update Strategy' : 'Deploy Strategy'}
+              {editingStrategy ? 'Update Strategy' : 
+               strategies.length >= MAX_STRATEGIES ? 'Strategy Limit Reached' : 'Deploy Strategy'}
             </button>
           </div>
         </div>
