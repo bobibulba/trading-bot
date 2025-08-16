@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Zap, Target, Settings, Play, Pause, BarChart3, X, Check, Edit3, Trash2, Plus, AlertTriangle } from 'lucide-react'
+import { Zap, Target, Settings, Play, Pause, BarChart3, X, Check, Edit3, Trash2, Plus, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react'
 import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts'
+import { useLivePrice } from '../../hooks/useLivePrice'
 
 interface Strategy {
   id: string
@@ -33,6 +34,54 @@ interface DeleteConfirmation {
   isOpen: boolean
   strategyId: string | null
   strategyName: string
+}
+
+const LivePricePill: React.FC<{ coin: string }> = ({ coin }) => {
+  const { price, prevPrice, loading, error } = useLivePrice(coin, 10000)
+
+  const formatPrice = (price: string | null): string => {
+    if (!price) return '0.00'
+    const num = parseFloat(price)
+    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+
+  const getPriceDirection = (): 'up' | 'down' | 'neutral' => {
+    if (!price || !prevPrice) return 'neutral'
+    const current = parseFloat(price)
+    const previous = parseFloat(prevPrice)
+    if (current > previous) return 'up'
+    if (current < previous) return 'down'
+    return 'neutral'
+  }
+
+  const direction = getPriceDirection()
+
+  if (loading && !price) {
+    return (
+      <div className="bg-gray-100 border-2 border-black px-3 py-1 text-xs font-black text-gray-600">
+        Live: …
+      </div>
+    )
+  }
+
+  if (error && !price) {
+    return (
+      <div className="bg-gray-100 border-2 border-black px-3 py-1 text-xs font-black text-gray-600">
+        Live: —
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white border-2 border-black px-3 py-1 text-xs font-black text-black flex items-center space-x-1">
+      <span>Live: ${formatPrice(price)}</span>
+      {direction !== 'neutral' && (
+        <span className={`opacity-50 ${direction === 'up' ? 'text-green-600' : 'text-red-600'}`}>
+          {direction === 'up' ? '▲' : '▼'}
+        </span>
+      )}
+    </div>
+  )
 }
 
 const StrategyTab: React.FC = () => {
@@ -303,6 +352,13 @@ const StrategyTab: React.FC = () => {
     showToast('Edit cancelled', 'info')
   }
 
+  // Extract main coin from strategy's first trading pair
+  const getMainCoin = (strategy: Strategy): string | null => {
+    if (!strategy.pairs || strategy.pairs.length === 0) return null
+    const firstPair = strategy.pairs[0]
+    return firstPair.split('/')[0] // Extract coin from "BTC/USDT" -> "BTC"
+  }
+
   return (
     <div className="space-y-8">
       {/* Toast Notification */}
@@ -378,88 +434,96 @@ const StrategyTab: React.FC = () => {
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {strategies.map((strategy) => (
-            <div key={strategy.id} className="bg-white border-4 border-black shadow-brutal p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-accent border-4 border-black flex items-center justify-center">
-                    {strategy.type === 'Scalping' ? <Zap className="w-5 h-5 text-black" /> :
-                     strategy.type === 'Swing Trading' ? <Target className="w-5 h-5 text-black" /> :
-                     <BarChart3 className="w-5 h-5 text-black" />}
+          {strategies.map((strategy) => {
+            const mainCoin = getMainCoin(strategy)
+            
+            return (
+              <div key={strategy.id} className="bg-white border-4 border-black shadow-brutal p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-accent border-4 border-black flex items-center justify-center">
+                      {strategy.type === 'Scalping' ? <Zap className="w-5 h-5 text-black" /> :
+                       strategy.type === 'Swing Trading' ? <Target className="w-5 h-5 text-black" /> :
+                       <BarChart3 className="w-5 h-5 text-black" />}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-black">{strategy.name}</h3>
+                      <p className="text-sm font-bold text-gray-600 uppercase">{strategy.type}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-black text-black">{strategy.name}</h3>
-                    <p className="text-sm font-bold text-gray-600 uppercase">{strategy.type}</p>
+                  <div className="flex flex-col items-end space-y-2">
+                    <span className={`px-3 py-1 text-xs font-black border-2 border-black ${
+                      strategy.status === 'Active' ? 'bg-accent text-black' : 'bg-gray-300 text-black'
+                    }`}>
+                      {strategy.status}
+                    </span>
+                    {/* Live Price Pill */}
+                    {mainCoin && <LivePricePill coin={mainCoin} />}
                   </div>
                 </div>
-                <span className={`px-3 py-1 text-xs font-black border-2 border-black ${
-                  strategy.status === 'Active' ? 'bg-accent text-black' : 'bg-gray-300 text-black'
-                }`}>
-                  {strategy.status}
-                </span>
-              </div>
 
-              <div className="space-y-3 mb-6">
-                <div className="flex justify-between">
-                  <span className="font-bold text-gray-600">Profit:</span>
-                  <span className="font-black text-accent">{strategy.profit}</span>
+                <div className="space-y-3 mb-6">
+                  <div className="flex justify-between">
+                    <span className="font-bold text-gray-600">Profit:</span>
+                    <span className="font-black text-accent">{strategy.profit}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold text-gray-600">Trades:</span>
+                    <span className="font-black text-black">{strategy.trades}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold text-gray-600">Win Rate:</span>
+                    <span className="font-black text-black">{strategy.winRate}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold text-gray-600">Pairs:</span>
+                    <span className="font-bold text-black text-sm">{strategy.pairs.join(', ')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold text-gray-600">Created:</span>
+                    <span className="font-bold text-black text-xs">
+                      {strategy.createdAt.toLocaleDateString()}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="font-bold text-gray-600">Trades:</span>
-                  <span className="font-black text-black">{strategy.trades}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-bold text-gray-600">Win Rate:</span>
-                  <span className="font-black text-black">{strategy.winRate}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-bold text-gray-600">Pairs:</span>
-                  <span className="font-bold text-black text-sm">{strategy.pairs.join(', ')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-bold text-gray-600">Created:</span>
-                  <span className="font-bold text-black text-xs">
-                    {strategy.createdAt.toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
 
-              <div className="flex space-x-2">
-                <button 
-                  onClick={() => toggleStrategyStatus(strategy.id)}
-                  className={`flex-1 border-2 border-black px-4 py-2 font-black text-xs uppercase transition-colors ${
-                    strategy.status === 'Active' 
-                      ? 'bg-red-500 text-white hover:bg-red-600' 
-                      : 'bg-accent text-black hover:bg-accent-dark'
-                  }`}
-                >
-                  {strategy.status === 'Active' ? (
-                    <>
-                      <Pause className="w-4 h-4 inline mr-2" />
-                      Pause
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 inline mr-2" />
-                      Start
-                    </>
-                  )}
-                </button>
-                <button 
-                  onClick={() => handleEdit(strategy)}
-                  className="bg-white border-2 border-black px-4 py-2 font-black text-black text-xs uppercase hover:bg-gray-50 transition-colors"
-                >
-                  <Edit3 className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => handleDeleteClick(strategy.id)}
-                  className="bg-red-500 border-2 border-black px-4 py-2 font-black text-white text-xs uppercase hover:bg-red-600 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex space-x-2">
+                  <button 
+                    onClick={() => toggleStrategyStatus(strategy.id)}
+                    className={`flex-1 border-2 border-black px-4 py-2 font-black text-xs uppercase transition-colors ${
+                      strategy.status === 'Active' 
+                        ? 'bg-red-500 text-white hover:bg-red-600' 
+                        : 'bg-accent text-black hover:bg-accent-dark'
+                    }`}
+                  >
+                    {strategy.status === 'Active' ? (
+                      <>
+                        <Pause className="w-4 h-4 inline mr-2" />
+                        Pause
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 inline mr-2" />
+                        Start
+                      </>
+                    )}
+                  </button>
+                  <button 
+                    onClick={() => handleEdit(strategy)}
+                    className="bg-white border-2 border-black px-4 py-2 font-black text-black text-xs uppercase hover:bg-gray-50 transition-colors"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteClick(strategy.id)}
+                    className="bg-red-500 border-2 border-black px-4 py-2 font-black text-white text-xs uppercase hover:bg-red-600 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 
