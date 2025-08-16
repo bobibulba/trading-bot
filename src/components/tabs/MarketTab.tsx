@@ -1,5 +1,61 @@
 import React from 'react'
-import { TrendingUp, TrendingDown, BarChart3, Eye } from 'lucide-react'
+import { TrendingUp, TrendingDown, BarChart3, Eye, AlertTriangle, ChevronUp, ChevronDown } from 'lucide-react'
+import { useLivePrice } from '../../hooks/useLivePrice'
+
+const LivePriceCard: React.FC<{ coin: string; symbol: string }> = ({ coin, symbol }) => {
+  const { price, prevPrice, loading, error } = useLivePrice(coin, 5000)
+
+  const formatPrice = (price: string | null): string => {
+    if (!price) return '0.00'
+    const num = parseFloat(price)
+    return num.toFixed(2)
+  }
+
+  const getPriceDirection = (): 'up' | 'down' | 'neutral' => {
+    if (!price || !prevPrice) return 'neutral'
+    const current = parseFloat(price)
+    const previous = parseFloat(prevPrice)
+    if (current > previous) return 'up'
+    if (current < previous) return 'down'
+    return 'neutral'
+  }
+
+  const direction = getPriceDirection()
+
+  return (
+    <div className="bg-white border-4 border-black shadow-brutal p-4 relative">
+      {error && (
+        <div className="absolute top-2 right-2 group">
+          <AlertTriangle className="w-4 h-4 text-red-500" />
+          <div className="absolute right-0 top-6 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+            {error}
+          </div>
+        </div>
+      )}
+      
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-lg font-black text-black">{symbol}</h4>
+        {direction !== 'neutral' && (
+          <div className={`${direction === 'up' ? 'text-accent' : 'text-red-500'}`}>
+            {direction === 'up' ? (
+              <ChevronUp className="w-4 h-4" />
+            ) : (
+              <ChevronDown className="w-4 h-4" />
+            )}
+          </div>
+        )}
+      </div>
+      
+      <div className="text-2xl font-black text-black">
+        {loading ? (
+          <span className="text-gray-500">Fetching…</span>
+        ) : (
+          `$${formatPrice(price)}`
+        )}
+      </div>
+    </div>
+  )
+}
 
 const MarketTab: React.FC = () => {
   const marketData = [
@@ -21,6 +77,13 @@ const MarketTab: React.FC = () => {
 
   return (
     <div className="space-y-8">
+      {/* Live Price Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <LivePriceCard coin="BTC" symbol="BTC" />
+        <LivePriceCard coin="ETH" symbol="ETH" />
+        <LivePriceCard coin="SOL" symbol="SOL" />
+      </div>
+
       {/* Market Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white border-4 border-black shadow-brutal p-6">
