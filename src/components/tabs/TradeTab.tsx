@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { DollarSign, TrendingUp, TrendingDown, Play, AlertTriangle, Target, Eye, Pause, TestTube, Clock } from 'lucide-react'
+import { useLivePrice } from '../../hooks/useLivePrice'
 
 interface Strategy {
   id: string
@@ -33,6 +34,52 @@ interface StrategyPerformance {
 interface Toast {
   message: string
   type: 'success' | 'error' | 'info' | 'warning'
+}
+
+const LivePriceHeader: React.FC<{ coin: string }> = ({ coin }) => {
+  const { price, lastUpdated, loading, error } = useLivePrice(coin, 5000)
+
+  const formatPrice = (price: string | null): string => {
+    if (!price) return '0.00'
+    const num = parseFloat(price)
+    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+
+  const getTimeAgo = (date: Date | null): string => {
+    if (!date) return 'never'
+    const now = new Date()
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+    
+    if (diffInSeconds < 60) return `${diffInSeconds}s ago`
+    
+    const diffInMinutes = Math.floor(diffInSeconds / 60)
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`
+    
+    const diffInHours = Math.floor(diffInMinutes / 60)
+    return `${diffInHours}h ago`
+  }
+
+  if (loading && !price) {
+    return (
+      <div className="bg-gray-100 border-4 border-black p-4 mb-8">
+        <p className="text-lg font-black text-gray-600 uppercase">
+          {coin} mark: Fetching... • updated never
+        </p>
+      </div>
+    )
+  }
+
+  if (error && !price) {
+    return null // Hide row if there's an error and no price data
+  }
+
+  return (
+    <div className="bg-accent border-4 border-black p-4 mb-8">
+      <p className="text-lg font-black text-black uppercase">
+        {coin} mark: ${formatPrice(price)} • updated {getTimeAgo(lastUpdated)}
+      </p>
+    </div>
+  )
 }
 
 const TradeTab: React.FC = () => {
@@ -75,6 +122,11 @@ const TradeTab: React.FC = () => {
           .sort((a: Strategy, b: Strategy) => b.createdAt.getTime() - a.createdAt.getTime())
         
         setActiveStrategies(activeOnly)
+        
+        // Set first active strategy as selected if none selected
+        if (activeOnly.length > 0 && selectedStrategy === 'scalping-master') {
+          setSelectedStrategy(activeOnly[0].id)
+        }
       } else {
         setActiveStrategies([])
       }
@@ -193,6 +245,18 @@ const TradeTab: React.FC = () => {
     showToast(`Strategy "${strategyName}" details (coming soon)`, 'info')
   }
 
+  // Get main coin from selected strategy
+  const getMainCoin = (): string | null => {
+    const strategy = activeStrategies.find(s => s.id === selectedStrategy)
+    if (!strategy || !strategy.pairs || strategy.pairs.length === 0) return null
+    
+    const firstPair = strategy.pairs[0]
+    const coin = firstPair.split('/')[0] // Extract coin from "BTC/USDT" -> "BTC"
+    return coin
+  }
+
+  const mainCoin = getMainCoin()
+
   return (
     <div className="space-y-8">
       {/* Toast Notification */}
@@ -208,6 +272,9 @@ const TradeTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Live Price Header */}
+      {mainCoin && <LivePriceHeader coin={mainCoin} />}
 
       {/* Active Strategies Section */}
       <div className="bg-white border-4 border-black shadow-brutal p-8">
